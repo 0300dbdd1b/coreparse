@@ -4,6 +4,8 @@
 #define CTB_PLATFORM_NOPREFIX
 #include "ctb_platform.h"
 #include "ctb_types.h"
+#define CTB_SHA2_NOPREFIX
+#include "ctb_sha2.h"
 #include "leveldb.h"
 #include "coreparse_encoding.h"
 
@@ -130,6 +132,10 @@ typedef struct coreparse_transaction
 {
     const u8 *  raw_ptr;
     u64         length;
+    u64         total_size;
+    u64         base_size;
+    u64         weight;
+    u64         vsize;
     u32         version;
     u32         locktime;
     u8          is_segwit;
@@ -137,6 +143,7 @@ typedef struct coreparse_transaction
     u64         input_count;
     const u8 *  outputs_start;
     u64         output_count;
+    const u8 *  witness_start;
 }   coreparse_transaction;
 
 typedef struct coreparse_tx_input
@@ -155,6 +162,19 @@ typedef struct coreparse_tx_output
     const u8 *  script_pubkey;
     u64         script_len;
 }   coreparse_tx_output;
+
+typedef struct coreparse_witness_item
+{
+    const u8 *  data;
+    u64         data_len;
+}   coreparse_witness_item;
+
+typedef struct coreparse_tx_witness
+{
+    coreparse_witness_item  *items;
+    u64                     item_count;
+    u8                      has_annex;
+} coreparse_tx_witness;
 
 typedef struct coreparse_block
 {
@@ -226,32 +246,54 @@ typedef struct coreparse_file_cache_entry
     u64     last_used;
 }   coreparse_file_cache_entry;
 
+typedef enum coreparse_ctx_flag
+{
+    NONE            =   0,
+    HAS_XORDAT      =   1 << 0,
+    HAS_BLOCKS      =   1 << 1,
+    HAS_BLOCKINDEX  =   1 << 2,
+    HAS_INDEXES     =   1 << 3,
+    HAS_CHAINSTATE  =   1 << 4,
+    HAS_TXINDEX     =   1 << 5,
+}   coreparse_ctx_flag;
+
 typedef struct coreparse_context
 {
     char    datadir[COREPARSE_MAX_PATH];
     char    blocksdir[COREPARSE_MAX_PATH];
-    char    indexdir[COREPARSE_MAX_PATH];
+    char    blockindexdir[COREPARSE_MAX_PATH];
+    char    chainstatedir[COREPARSE_MAX_PATH];
+    char    txindexdir[COREPARSE_MAX_PATH];
 
     LDB_Instance    ldb;
+    LDB_Instance    ldb_chainstate;
+    LDB_Instance    ldb_txindex;
 
     coreparse_block_index_record *      block_index_records;
     u64                                 block_index_record_count;
     coreparse_file_information_record * file_information_records;
     u64                                 file_information_record_count;
 
-    u8  index_obfuscation_key[64];
-    u16 index_obfuscation_key_len;
+    u8  chainstate_obfuscation_key[64];
+    u16 chainstate_obfuscation_key_len;
+
+    u8  txindex_obfuscation_key[64];
+    u16 txindex_obfuscation_key_len;
+
     u8  blocks_obfuscation_key[8];
     u8  has_blocks_obfuscation_key;
 
     coreparse_file_cache_entry file_cache[COREPARSE_FILE_CACHE_SIZE];
     u64 cache_usage_counter;
+
+    u32 flags;
 }   coreparse_context;
 
 
 coreparse_context * coreparse_init(const char *datadir);
 void coreparse_deinit(coreparse_context *ctx);
 
+coreparse_file_cache_entry * coreparse_get_file_map(coreparse_context *ctx, u64 file_idx);
 coreparse_block *coreparse_get_block(coreparse_context *ctx, u64 height);
 void coreparse_free_block(coreparse_block *block);
 
@@ -262,7 +304,19 @@ int coreparse_inputs_next(coreparse_tx_input_iterator *iter, coreparse_tx_input 
 void coreparse_outputs_begin(coreparse_tx_output_iterator *iter, const coreparse_transaction *tx, const coreparse_block *block);
 int coreparse_outputs_next(coreparse_tx_output_iterator *iter, coreparse_tx_output *out);
 
+coreparse_tx_witness coreparse_get_witness_for_input(const coreparse_transaction *tx, u64 input_index, const coreparse_block *block);
+void coreparse_free_witness(coreparse_tx_witness *witness);
 
+int coreparse_witness_has_annex(const coreparse_tx_witness *witness);
+
+void coreparse_get_txid(const coreparse_transaction *tx, u8 out_hash[32]);
+void coreparse_get_wtxid(const coreparse_transaction *tx, u8 out_hash[32]);
+
+// Exported from coreparse_iterator.c
+int coreparse_parse_tx(const u8 *start_ptr, const u8 *end_boundary, coreparse_transaction *view, const u8 **next_cursor);
+int coreparse_fetch_transaction(coreparse_context *ctx, const u8 txid[32], coreparse_transaction *out_tx);
+int coreparse_get_tx_location(coreparse_context *ctx, const u8 txid[32], u64 *file_no, u64 *block_offset, u64 *tx_offset);
+int coreparse_get_raw_utxo(coreparse_context *ctx, const u8 txid[32], u32 vout, u8 **out_data, u64 *out_len);
 void reverse_bytes(u8 *p, u64 len);
 // void print_byte_string(const u8 *bytes, u64 size, FILE *output);
 // void convert_u32_to_uint8_array(u32 value, u8 *output_array);

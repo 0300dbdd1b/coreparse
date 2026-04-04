@@ -1,4 +1,5 @@
 #include "include/leveldb.h"
+#include <leveldb/c.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,13 +12,16 @@ LDB_Instance LDB_Init(const char *path)
 	db.errors = NULL;
 	db.dbPath = path;
 	db.options = LDB_OptionsCreate();
+    // NOTE: using leveldb Snappy compression will likely cause corruption, so we disable it.
+    LDB_OptionsSetCompression(db.options, leveldb_no_compression);
 	LDB_OptionsSetCreateIfMissing(db.options, 0);
 	LDB_OptionsSetErrorIfExists(db.options, 0);
+    LDB_OptionsSetParanoidChecks(db.options, 1);
 
 	db.roptions = LDB_ReadOptionsCreate();
 	LDB_ReadOptionsSetFillCache(db.roptions, 0);
 
-	db.woptions = LDB_WriteOptionsCreate();
+	db.woptions = NULL;
 	return db;
 }
 
@@ -87,7 +91,7 @@ size_t LDB_CountEntries(LDB_Instance instance, const char keyPrefix)
 void LDB_CountEntriesForPrefixes(LDB_Instance instance, const char* keyPrefixes, size_t prefixCount, size_t* counts)
 {
 	LDB_Iterator* iterator = LDB_CreateIterator(instance.db, instance.roptions);
-	memset(counts, 0, prefixCount * sizeof(size_t));  // Initialize all counts to 0
+	memset(counts, 0, prefixCount * sizeof(size_t));
 
 	const char* key;
 	size_t keyLen;

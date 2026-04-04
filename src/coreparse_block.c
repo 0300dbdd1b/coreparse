@@ -12,7 +12,7 @@ static void get_blk_path(coreparse_context *ctx, u64 file_num, char *out_buf, u6
     snprintf((char*)out_buf, size, "%s/blk%05llu.dat", ctx->blocksdir, (unsigned long long)file_num);
 }
 
-static coreparse_file_cache_entry * coreparse_get_file_map(coreparse_context *ctx, u64 file_idx)
+coreparse_file_cache_entry * coreparse_get_file_map(coreparse_context *ctx, u64 file_idx)
 {
     int i;
     int best_slot = -1;
@@ -64,15 +64,37 @@ static coreparse_file_cache_entry * coreparse_get_file_map(coreparse_context *ct
         return NULL;
     }
 
-    int prot_flags = PROT_READ;
+    int prot_flags  = PROT_READ | PROT_WRITE;
+    int map_flags   = MAP_PRIVATE | MAP_POPULATE;
     if (ctx->has_blocks_obfuscation_key) prot_flags |= PROT_WRITE;
 
-    void *map = mmap(NULL, st.st_size, prot_flags, MAP_PRIVATE, fd, 0);
+    void *map = mmap(NULL, st.st_size, prot_flags, map_flags, fd, 0);
     if (map == MAP_FAILED)
     {
         close(fd);
         return NULL;
     }
+    if (ctx->has_blocks_obfuscation_key)
+    {
+        // Cast pointers to 64-bit for massive speedup (8 bytes per CPU cycle)
+        u64 *ptr64 = (u64*)map;
+        u64 key64;
+        memcpy(&key64, ctx->blocks_obfuscation_key, 8); // xor.dat key is exactly 8 bytes
+
+        u64 chunks = st.st_size / 8;
+        for (u64 j = 0; j < chunks; j++)
+        {
+            ptr64[j] ^= key64;
+        }
+
+        // Handle any trailing bytes if the file size isn't a perfect multiple of 8
+        u8 *ptr8 = (u8*)map;
+        for (u64 j = chunks * 8; j < (u64)st.st_size; j++)
+        {
+            ptr8[j] ^= ctx->blocks_obfuscation_key[j % 8];
+        }
+    }
+    posix_madvise(map, st.st_size, POSIX_MADV_WILLNEED);
     posix_madvise(map, st.st_size, POSIX_MADV_SEQUENTIAL);
     coreparse_file_cache_entry *entry = &ctx->file_cache[target_idx];
     entry->fd = fd;
@@ -97,15 +119,6 @@ coreparse_block *coreparse_get_block(coreparse_context *ctx, u64 height)
     u32 block_data_size;
     memcpy(&block_data_size, base_ptr + raw_offset + 4, 4);
 
-    if (ctx->has_blocks_obfuscation_key)
-    {
-        u8 *size_p = (u8*)&block_data_size;
-        u64 offset_base = raw_offset + 4;
-        for (u8 i = 0; i < 4; i++)
-        {
-            size_p[i] ^= ctx->blocks_obfuscation_key[(offset_base + i) % 8];
-        }
-    }
 
     u64 total_size = 8 + block_data_size;
 
