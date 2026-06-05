@@ -149,24 +149,19 @@ coreparse_context * coreparse_init(const char *datadir)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
 
-    if (sigaction(SIGINT, &sa, NULL) == -1)
-    {
-        return NULL;
-    }
-    if (sigaction(SIGTERM, &sa, NULL) == -1)
-    {
-        return NULL;
-    }
+    if (sigaction(SIGINT,   &sa, NULL) == -1)   return NULL;
+    if (sigaction(SIGTERM,  &sa, NULL) == -1)   return NULL;
 
     coreparse_context * ctx = calloc(1, sizeof(coreparse_context));
     if (!ctx) return NULL;
 
-    snprintf(ctx->datadir,          COREPARSE_MAX_PATH, "%s",                   datadir);
-    snprintf(ctx->blocksdir,        COREPARSE_MAX_PATH, "%s/blocks",            datadir);
-    snprintf(ctx->blockindexdir,    COREPARSE_MAX_PATH, "%s/blocks/index",      datadir);
-    snprintf(ctx->txindexdir,       COREPARSE_MAX_PATH, "%s/indexes/txindex",   datadir);
-    snprintf(ctx->chainstatedir,    COREPARSE_MAX_PATH, "%s/chainstate",        datadir);
-
+    snprintf(ctx->datadir,              COREPARSE_MAX_PATH, "%s",                               datadir);
+    snprintf(ctx->blocksdir,            COREPARSE_MAX_PATH, "%s/blocks",                        datadir);
+    snprintf(ctx->blockindexdir,        COREPARSE_MAX_PATH, "%s/blocks/index",                  datadir);
+    snprintf(ctx->txindexdir,           COREPARSE_MAX_PATH, "%s/indexes/txindex",               datadir);
+    snprintf(ctx->chainstatedir,        COREPARSE_MAX_PATH, "%s/chainstate",                    datadir);
+    snprintf(ctx->coinstatindexdir,     COREPARSE_MAX_PATH, "%s/indexes/coinstatsindex/db",     datadir);
+    snprintf(ctx->txospenderindexdir,   COREPARSE_MAX_PATH, "%s/indexes/txospenderindex",       datadir);
 
     if (!fs_path_is_dir(ctx->datadir))          goto error;
     if (!fs_path_is_dir(ctx->blocksdir))        goto error;
@@ -178,7 +173,7 @@ coreparse_context * coreparse_init(const char *datadir)
         ctx->ldb_txindex = LDB_InitOpen(ctx->txindexdir);
         if (ctx->ldb_txindex.errors == NULL)
         {
-            ctx->flags |= HAS_TXINDEX;
+            ctx->flags |= (HAS_INDEXES | HAS_TXINDEX);
             load_db_obfuscation_key(&ctx->ldb_txindex, ctx->txindex_obfuscation_key, &ctx->txindex_obfuscation_key_len, "txindex");
         }
     }
@@ -187,7 +182,7 @@ coreparse_context * coreparse_init(const char *datadir)
         ctx->ldb_chainstate = LDB_InitOpen(ctx->chainstatedir);
         if (ctx->ldb_chainstate.errors == NULL)
         {
-            ctx->flags |= HAS_CHAINSTATE;
+            ctx->flags |= (HAS_INDEXES | HAS_CHAINSTATE);
             load_db_obfuscation_key(&ctx->ldb_chainstate, ctx->chainstate_obfuscation_key, &ctx->chainstate_obfuscation_key_len, "chainstate");
         }
     }
@@ -245,6 +240,7 @@ coreparse_context * coreparse_init(const char *datadir)
         ctx->file_cache[i].last_used = 0;
     }
     LDB_IterDestroy(iterator);
+    g_emergency_ctx = ctx;
     return (ctx);
 
 error:

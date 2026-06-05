@@ -147,6 +147,7 @@ coreparse_block *coreparse_get_block(coreparse_context *ctx, u64 height)
 
 void coreparse_free_block(coreparse_block *block)
 {
+    // WARN: Useless code in useless function
     if (block)
     {
         free(block);

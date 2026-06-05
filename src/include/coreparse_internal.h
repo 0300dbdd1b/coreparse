@@ -248,13 +248,15 @@ typedef struct coreparse_file_cache_entry
 
 typedef enum coreparse_ctx_flag
 {
-    NONE            =   0,
-    HAS_XORDAT      =   1 << 0,
-    HAS_BLOCKS      =   1 << 1,
-    HAS_BLOCKINDEX  =   1 << 2,
-    HAS_INDEXES     =   1 << 3,
-    HAS_CHAINSTATE  =   1 << 4,
-    HAS_TXINDEX     =   1 << 5,
+    NONE                =   0,
+    HAS_XORDAT          =   1 << 0,
+    HAS_BLOCKS          =   1 << 1,
+    HAS_BLOCKINDEX      =   1 << 2,
+    HAS_INDEXES         =   1 << 3,
+    HAS_CHAINSTATE      =   1 << 4,
+    HAS_TXINDEX         =   1 << 5,
+    HAS_COINSTATINDEX   =   1 << 6,
+    HAS_TXOSPENDERINDEX =   1 << 7,
 }   coreparse_ctx_flag;
 
 typedef struct coreparse_context
@@ -264,6 +266,8 @@ typedef struct coreparse_context
     char    blockindexdir[COREPARSE_MAX_PATH];
     char    chainstatedir[COREPARSE_MAX_PATH];
     char    txindexdir[COREPARSE_MAX_PATH];
+    char    coinstatindexdir[COREPARSE_MAX_PATH];
+    char    txospenderindexdir[COREPARSE_MAX_PATH];
 
     LDB_Instance    ldb;
     LDB_Instance    ldb_chainstate;
